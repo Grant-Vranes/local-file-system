@@ -1,7 +1,6 @@
 package com.shenhua.filectl.modules.filesystem.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.shenhua.filectl.common.configure.SupportUploadFileTypeConfig;
 import com.shenhua.filectl.common.constants.FileSystemConstant;
 import com.shenhua.filectl.common.utils.DatePlusUtil;
 import com.shenhua.filectl.common.utils.FileUtil;
@@ -45,9 +44,6 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileCtl> implements
 
     // @Resource
     // private SecurityUserTokenService customUserDetailsTokenService;
-
-    @Resource
-    private SupportUploadFileTypeConfig supportUploadFileTypeConfig;
 
     @Value("${file-system.prefix}")
     private String filePrefix;
