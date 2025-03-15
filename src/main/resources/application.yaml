@@ -1,0 +1,34 @@
+# 统一前缀
+server:
+  servlet:
+    context-path: /file-system
+
+spring:
+  profiles:
+    active: dev
+  hikari:
+    #默认30000 ms，即30s
+    connection-timeout: 30000
+    #默认600000 ms，即10min
+    idle-timeout: 600000
+    #连接池中的最大连接数（active+idle），默认10
+    maximum-pool-size: 200
+    #默认10
+    minimum-idle: 50
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+      enabled: true
+
+# 修改mapper.xml的location， 以及指定日志实现
+mybatis-plus:
+  mapper-locations: classpath*:com/shenhua/filectl/modules/**/xml/*.xml
+  configuration:
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  #    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+

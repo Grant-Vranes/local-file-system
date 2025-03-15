@@ -1,0 +1,29 @@
+server.port: 12305
+environment: dev
+spring:
+  application:
+    name: file-system-dev
+  datasource:
+    dynamic:
+      primary: master
+      datasource:
+        master:
+          url: jdbc:sqlserver://host:1433;databaseName=file_system
+          username: xxx
+          password: xxx
+          type: com.zaxxer.hikari.HikariDataSource
+          driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+    http:
+      encoding:
+        force: true
+        charset: utf-8
+        enabled: true
+
+# file system settings 具体的子文件夹关联FileSystemConstant.Module
+file-system:
+  # 存储的路径前缀，为后期方便迁移 base前缀
+  prefix: /Users/akio/Movies/file_system
+  # 通用文件夹, 是相对于prefix的相对路径
+  file-dir: /file_pool
+  # 平面图文件文件, 是相对于prefix的相对路径
+  plane-drawing-dir: /plane_drawing_dir

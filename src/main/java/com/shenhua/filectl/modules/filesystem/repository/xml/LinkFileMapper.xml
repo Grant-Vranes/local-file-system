@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shenhua.filectl.modules.filesystem.repository.LinkFileMapper">
+
+    <select id="getFileInfoByLinkId" resultType="com.shenhua.filectl.modules.filesystem.response.FileInfo">
+        select tf.file_name name, tf.id file_id, tlf.id associate_id from tr_link_file tlf
+        left join t_file tf on tf.id = tlf.file_id
+        where tlf.link_id = #{linkId} and tlf.module_name = #{module} and tlf.file_id is not null and tlf.file_id != ''
+    </select>
+    <select id="checkEquipmentAttachFileChangedAnotherSource" resultType="java.lang.Integer">
+        select count(*) from tr_link_file where module_name = #{module} and link_id = #{linkId}
+        and file_id like '%eflow/res/getById%' and file_id != #{nowFileId}
+    </select>
+    <select id="getFileIdsByCondition" resultType="java.lang.String">
+        select file_id from tr_link_file
+        ${ew.customSqlSegment}
+    </select>
+</mapper>
