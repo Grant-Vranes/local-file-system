@@ -3,7 +3,10 @@
 
 仅提供后端方案
 
-
+[![GitHub stars](https://img.shields.io/github/stars/Grant-Vranes/local-file-system)](https://github.com/Grant-Vranes/local-file-system/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/Grant-Vranes/local-file-system)](https://github.com/Grant-Vranes/local-file-system/network)
+[![GitHub issues](https://img.shields.io/github/issues/Grant-Vranes/local-file-system)](https://github.com/Grant-Vranes/local-file-system/issues)
+[![GitHub license](https://img.shields.io/github/license/Grant-Vranes/local-file-system)](https://github.com/Grant-Vranes/local-file-system/blob/main/LICENSE)
 
 ## 环境
 
