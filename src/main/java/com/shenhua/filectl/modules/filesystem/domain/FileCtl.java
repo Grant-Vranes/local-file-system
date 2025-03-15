@@ -8,7 +8,7 @@ import lombok.experimental.Accessors;
 
 /**
  * <p>
- * ????
+ * 文件信息存储
  * </p>
  *
  * @author hshi22

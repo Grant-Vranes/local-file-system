@@ -32,7 +32,7 @@ import java.util.Objects;
 
 /**
  * <p>
- * ???? 服务实现类
+ * 文件信息 服务实现类
  * </p>
  *
  * @author hshi22
@@ -140,7 +140,7 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileCtl> implements
      * 上传文件到指定module对应的文件夹
      * 通过URL的方式
      * @param module
-     * @param fileUrl
+     * @param fileUrl 网络地址
      * @return
      */
     @Override
@@ -199,44 +199,6 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileCtl> implements
         FileCtl fileCtl = getById(fileId);
         if (Objects.isNull(fileCtl)) {
             throw new BusinessException(ResultCode.FILE_NOT_FOUND);
-        }
-        try {
-            // 将文件写入输入流
-            FileInputStream fileInputStream = new FileInputStream(filePrefix + fileCtl.getFilePath());
-            return FileUtil.downloadFileForInline(fileInputStream, fileCtl.getFileName());
-        } catch(FileNotFoundException e){
-            LOG.error("FILE_NOT_FOUND => {}", e.toString());
-            throw new BusinessException(ResultCode.FILE_NOT_FOUND);
-        } catch (IOException e) {
-            LOG.error("FILE_TRANSFER_ERROR => {}", e.toString());
-            throw new BusinessException(ResultCode.FILE_TRANSFER_ERROR);
-        }
-    }
-
-    /**
-     * 根据文件ID下载文件
-     * @param response
-     * @param fileId 文件id
-     * @param authorization token
-     * @return
-     */
-    @Override
-    public Object downloadHandlerAuth(HttpServletResponse response, String fileId, String authorization) {
-        // 做授权验证
-        try {
-            // SecurityUser secureUser = customUserDetailsTokenService.verifyTokenNoRedis(authorization);
-        } catch (Exception e){
-            throw new BusinessException();
-        }
-
-        // 为空验证
-        if (StringUtils.isBlank(fileId)) {
-            throw new BusinessException(ResultCode.MISS_PARAMETER);
-        }
-        // 根据文件ID获得文件记录
-        FileCtl fileCtl = getById(fileId);
-        if (Objects.isNull(fileCtl)) {
-            throw new BusinessException(ResultCode.MISS_PARAMETER);
         }
         try {
             // 将文件写入输入流

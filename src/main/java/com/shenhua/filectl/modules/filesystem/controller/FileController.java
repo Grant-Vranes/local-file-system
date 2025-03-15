@@ -39,7 +39,7 @@ public class FileController extends BaseController {
      * @param file
      * @return
      */
-    @PostMapping("/uploadWithModule")
+    @PostMapping("/upload-with-module")
     @CheckSupportUploadFileType(fileArgsIndex = 1,
             supportUploadFileType = {FileType.JPG,
                     FileType.JPEG,
@@ -107,6 +107,20 @@ public class FileController extends BaseController {
     }
 
     /**
+     * 上传文件到指定module对应的文件夹
+     * 通过URL的方式
+     * @param module
+     * @param fileUrl 网络地址
+     * @return
+     */
+    @PostMapping("/upload-with-module-by-url")
+    public Result<FileInfo> uploadWithModuleByURL(@RequestParam(name = "module", defaultValue = "DEFAULT") FileSystemConstant.Module module,
+                                  @RequestParam("fileUrl") String fileUrl,
+                                  @RequestParam("fileName") String fileName){
+        return success(fileService.uploadWithModuleByURL(module, fileUrl, fileName));
+    }
+
+    /**
      * 根据文件ID下载文件
      * @param fileId 文件id
      * @return
@@ -114,5 +128,28 @@ public class FileController extends BaseController {
     @GetMapping("/download/{fileId}")
     public Object downloadHandler(HttpServletResponse response, @PathVariable("fileId") String fileId) {
         return fileService.downloadHandler(response, fileId);
+    }
+
+    /**
+     * 根据文件Id获取FileInfo信息
+     * @param fileId
+     * @return
+     */
+    @GetMapping("/file-info/{fileId}")
+    public Result getFileInfoByFileId(@PathVariable("fileId") String fileId) {
+        return success(fileService.getFileInfoByFileId(fileId));
+    }
+
+    /**
+     * 根据模块和linkId获得对应文件
+     * 即根据某实体的id获取在某一个module上传的文件info集合
+     * @param module
+     * @param linkId
+     * @return
+     */
+    @GetMapping("/file-info-by-link-id")
+    public Result getFileInfoByLinkId(@RequestParam(name = "module") FileSystemConstant.Module module,
+                                       @RequestParam("linkId") String linkId) {
+        return success(linkFileService.getFileInfoByLinkId(module, linkId));
     }
 }

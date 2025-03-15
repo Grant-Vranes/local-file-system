@@ -6,7 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 
 /**
  * <p>
- * ???? Mapper 接口
+ * 文件信息存储表 Mapper 接口
  * </p>
  *
  * @author hshi22

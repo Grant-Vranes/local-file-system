@@ -17,7 +17,7 @@ import java.util.List;
 
 /**
  * <p>
- *  服务实现类
+ * 各个模块的表ID与文件ID的关联 服务实现类
  * </p>
  *
  * @author hshi22
