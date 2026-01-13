@@ -3,10 +3,13 @@ package com.shenhua.filectl.modules.filesystem.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.shenhua.filectl.common.constants.FileSystemConstant;
 import com.shenhua.filectl.modules.filesystem.domain.FileCtl;
+import com.shenhua.filectl.modules.filesystem.request.ChunkUploadRequest;
+import com.shenhua.filectl.modules.filesystem.response.ChunkUploadResponse;
 import com.shenhua.filectl.modules.filesystem.response.FileInfo;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletResponse;
+import java.util.Set;
 
 /**
  * <p>
@@ -74,4 +77,28 @@ public interface IFileService extends IService<FileCtl> {
      * @return
      */
     FileInfo uploadWithModuleByURL(FileSystemConstant.Module module, String fileUrl, String fileName);
+
+    /**
+     * 分片上传 - 检查分片状态
+     * @param identifier 文件唯一标识
+     * @return 已上传的分片序号集合
+     */
+    Set<Integer> checkChunkStatus(String identifier);
+
+    /**
+     * 分片上传 - 上传单个分片
+     * @param module 模块
+     * @param request 分片请求参数
+     * @param chunk 分片文件数据
+     * @return 上传响应
+     */
+    ChunkUploadResponse uploadChunk(FileSystemConstant.Module module, ChunkUploadRequest request, MultipartFile chunk);
+
+    /**
+     * 分片上传 - 合并所有分片
+     * @param module 模块
+     * @param request 分片请求参数
+     * @return 文件信息
+     */
+    FileInfo mergeChunks(FileSystemConstant.Module module, ChunkUploadRequest request);
 }

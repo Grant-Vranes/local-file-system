@@ -10,6 +10,8 @@ import com.shenhua.filectl.common.web.domain.ResultCode;
 import com.shenhua.filectl.common.web.exception.base.BusinessException;
 import com.shenhua.filectl.modules.filesystem.domain.FileCtl;
 import com.shenhua.filectl.modules.filesystem.repository.FileMapper;
+import com.shenhua.filectl.modules.filesystem.request.ChunkUploadRequest;
+import com.shenhua.filectl.modules.filesystem.response.ChunkUploadResponse;
 import com.shenhua.filectl.modules.filesystem.response.FileInfo;
 import com.shenhua.filectl.modules.filesystem.service.IFileService;
 import org.apache.commons.lang3.StringUtils;
@@ -22,12 +24,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletResponse;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.Base64;
-import java.util.Objects;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * <p>
@@ -124,12 +127,46 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileCtl> implements
         fileName = FileUtil.concatenate(fileNameWithoutExtension, FileUtil.STANDARD_SPLICE, UUIDUtils.uuid(), fileSuffix);
 
         String relativePath = FileUtil.concatenateWithSlash(folderName, fileName);
-        FileUtil.transferToAuto(filePrefix, relativePath, file);
+        
+        // 优化：对于大文件使用流式传输
+        if (file.getSize() > 10 * 1024 * 1024) { // 超过10MB使用流式处理
+            LOG.info("检测到大文件上传({}MB)，使用流式传输", file.getSize() / (1024 * 1024));
+            transferLargeFile(filePrefix, relativePath, file);
+        } else {
+            FileUtil.transferToAuto(filePrefix, relativePath, file);
+        }
+        
         FileCtl fileCtl = initFileCtlInfo(file, relativePath, module);
         save(fileCtl);
 
         // return new FileInfo(file.getOriginalFilename(), fileCtl.getId(), systemConfigService.generateDirectLink(fileCtl.getId()));
         return new FileInfo(file.getOriginalFilename(), fileCtl.getId());
+    }
+
+    /**
+     * 大文件流式传输
+     */
+    private void transferLargeFile(String prefix, String relativePath, MultipartFile file) {
+        try {
+            String absolutePath = prefix + relativePath;
+            File targetFile = new File(absolutePath);
+            if (!targetFile.getParentFile().exists()) {
+                targetFile.getParentFile().mkdirs();
+            }
+            
+            try (InputStream is = file.getInputStream();
+                 FileOutputStream fos = new FileOutputStream(targetFile)) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = is.read(buffer)) != -1) {
+                    fos.write(buffer, 0, bytesRead);
+                }
+                fos.flush();
+            }
+        } catch (IOException e) {
+            LOG.error("大文件传输失败 =>{}", e.toString());
+            throw new BusinessException(ResultCode.FILE_TRANSFER_ERROR);
+        }
     }
 
     /**
@@ -222,5 +259,223 @@ public class FileServiceImpl extends ServiceImpl<FileMapper, FileCtl> implements
         FileCtl fileCtl = getById(fileId);
         // return new FileInfo(fileCtl.getFileName(), fileCtl.getId(), systemConfigService.generateDirectLink(fileCtl.getId()));
         return new FileInfo(fileCtl.getFileName(), fileCtl.getId());
+    }
+
+    /**
+     * 检查分片上传状态
+     * @param identifier 文件唯一标识
+     * @return 已上传的分片序号集合
+     */
+    @Override
+    public Set<Integer> checkChunkStatus(String identifier) {
+        String chunkFolderPath = getChunkFolderPath(identifier);
+        File chunkFolder = new File(chunkFolderPath);
+        
+        if (!chunkFolder.exists() || !chunkFolder.isDirectory()) {
+            return new HashSet<>();
+        }
+        
+        File[] chunkFiles = chunkFolder.listFiles();
+        if (chunkFiles == null || chunkFiles.length == 0) {
+            return new HashSet<>();
+        }
+        
+        return Arrays.stream(chunkFiles)
+                .map(File::getName)
+                .map(FileUtil::resolveChunkFileNumber)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * 上传单个分片
+     * @param module 模块
+     * @param request 分片请求参数
+     * @param chunk 分片文件数据
+     * @return 上传响应
+     */
+    @Override
+    @Transactional(rollbackFor = {Exception.class})
+    public ChunkUploadResponse uploadChunk(FileSystemConstant.Module module, ChunkUploadRequest request, MultipartFile chunk) {
+        try {
+            // 验证参数
+            validateChunkRequest(request, chunk);
+            
+            // 检查该分片是否已上传
+            Set<Integer> uploadedChunks = checkChunkStatus(request.getIdentifier());
+            if (uploadedChunks.contains(request.getChunkNumber())) {
+                LOG.info("分片已存在，跳过上传: identifier={}, chunkNumber={}", 
+                    request.getIdentifier(), request.getChunkNumber());
+                ChunkUploadResponse response = new ChunkUploadResponse(false, uploadedChunks);
+                response.setMessage("分片已存在");
+                return response;
+            }
+            
+            // 保存分片文件
+            String chunkFilePath = getChunkFilePath(request.getIdentifier(), request.getChunkNumber());
+            File chunkFile = new File(chunkFilePath);
+            if (!chunkFile.getParentFile().exists()) {
+                chunkFile.getParentFile().mkdirs();
+            }
+            
+            chunk.transferTo(chunkFile);
+            uploadedChunks.add(request.getChunkNumber());
+            
+            LOG.info("分片上传成功: identifier={}, chunkNumber={}/{}", 
+                request.getIdentifier(), request.getChunkNumber(), request.getTotalChunks());
+            
+            // 检查是否所有分片都已上传完成
+            if (uploadedChunks.size() == request.getTotalChunks()) {
+                LOG.info("所有分片上传完成，开始合并: identifier={}", request.getIdentifier());
+                FileInfo fileInfo = mergeChunks(module, request);
+                ChunkUploadResponse response = new ChunkUploadResponse(fileInfo);
+                response.setMessage("文件上传并合并成功");
+                return response;
+            }
+            
+            ChunkUploadResponse response = new ChunkUploadResponse(true, uploadedChunks);
+            response.setMessage("分片上传成功");
+            return response;
+            
+        } catch (IOException e) {
+            LOG.error("分片上传失败: identifier={}, chunkNumber={}, error={}", 
+                request.getIdentifier(), request.getChunkNumber(), e.getMessage());
+            throw new BusinessException(ResultCode.FILE_TRANSFER_ERROR);
+        }
+    }
+
+    /**
+     * 合并所有分片
+     * @param module 模块
+     * @param request 分片请求参数
+     * @return 文件信息
+     */
+    @Override
+    @Transactional(rollbackFor = {Exception.class})
+    public FileInfo mergeChunks(FileSystemConstant.Module module, ChunkUploadRequest request) {
+        try {
+            String folderName = module.getFolderName();
+            
+            // 生成最终文件名和路径
+            String fileName = request.getFilename();
+            String fileSuffix = FileUtil.getFileSuffix(fileName);
+            String fileNameWithoutExtension = FileUtil.getFileNameWithoutExtension(fileName);
+            String finalFileName = FileUtil.concatenate(fileNameWithoutExtension, FileUtil.STANDARD_SPLICE, 
+                UUIDUtils.uuid(), fileSuffix);
+            
+            String relativePath = FileUtil.concatenateWithSlash(folderName, finalFileName);
+            String absolutePath = filePrefix + relativePath;
+            
+            // 创建目标文件
+            File targetFile = new File(absolutePath);
+            if (!targetFile.getParentFile().exists()) {
+                targetFile.getParentFile().mkdirs();
+            }
+            
+            // 合并分片
+            mergeChunkFiles(request.getIdentifier(), request.getTotalChunks(), targetFile);
+            
+            // 删除分片临时文件
+            deleteChunkFiles(request.getIdentifier());
+            
+            // 保存文件信息到数据库
+            FileCtl fileCtl = new FileCtl();
+            fileCtl.setFileName(fileName);
+            fileCtl.setType(fileSuffix);
+            fileCtl.setSize(FileUtil.getFileSizeDesc(request.getTotalSize()));
+            fileCtl.setFilePath(relativePath);
+            fileCtl.setModuleName(module.getModule());
+            save(fileCtl);
+            
+            LOG.info("文件合并成功: identifier={}, fileId={}, fileName={}", 
+                request.getIdentifier(), fileCtl.getId(), fileName);
+            
+            return new FileInfo(fileName, fileCtl.getId());
+            
+        } catch (Exception e) {
+            LOG.error("文件合并失败: identifier={}, error={}", request.getIdentifier(), e.getMessage());
+            // 清理临时文件
+            try {
+                deleteChunkFiles(request.getIdentifier());
+            } catch (Exception ex) {
+                LOG.error("清理临时文件失败: identifier={}", request.getIdentifier());
+            }
+            throw new BusinessException(ResultCode.FILE_TRANSFER_ERROR);
+        }
+    }
+
+    /**
+     * 验证分片请求参数
+     */
+    private void validateChunkRequest(ChunkUploadRequest request, MultipartFile chunk) {
+        if (request == null || chunk == null || chunk.isEmpty()) {
+            throw new BusinessException(ResultCode.MISS_PARAMETER);
+        }
+        if (StringUtils.isBlank(request.getIdentifier())) {
+            throw new BusinessException(ResultCode.MISS_PARAMETER, "文件标识不能为空");
+        }
+        if (request.getChunkNumber() == null || request.getChunkNumber() < 1) {
+            throw new BusinessException(ResultCode.MISS_PARAMETER, "分片序号无效");
+        }
+        if (request.getTotalChunks() == null || request.getTotalChunks() < 1) {
+            throw new BusinessException(ResultCode.MISS_PARAMETER, "总分片数无效");
+        }
+        if (request.getChunkNumber() > request.getTotalChunks()) {
+            throw new BusinessException(ResultCode.MISS_PARAMETER, "分片序号超出范围");
+        }
+    }
+
+    /**
+     * 获取分片文件夹路径
+     */
+    private String getChunkFolderPath(String identifier) {
+        return FileUtil.concatenateWithSlash(filePrefix, "chunks", identifier);
+    }
+
+    /**
+     * 获取分片文件路径
+     */
+    private String getChunkFilePath(String identifier, Integer chunkNumber) {
+        String chunkFolder = getChunkFolderPath(identifier);
+        String chunkFileName = FileUtil.generateChunkFilename(chunkNumber);
+        return FileUtil.concatenateWithSlash(chunkFolder, chunkFileName);
+    }
+
+    /**
+     * 合并分片文件
+     */
+    private void mergeChunkFiles(String identifier, Integer totalChunks, File targetFile) throws IOException {
+        try (FileOutputStream fos = new FileOutputStream(targetFile)) {
+            for (int i = 1; i <= totalChunks; i++) {
+                String chunkFilePath = getChunkFilePath(identifier, i);
+                File chunkFile = new File(chunkFilePath);
+                
+                if (!chunkFile.exists()) {
+                    throw new BusinessException(ResultCode.FILE_NOT_FOUND, 
+                        "分片文件不存在: " + i);
+                }
+                
+                try (FileInputStream fis = new FileInputStream(chunkFile)) {
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = fis.read(buffer)) != -1) {
+                        fos.write(buffer, 0, bytesRead);
+                    }
+                }
+            }
+            fos.flush();
+        }
+    }
+
+    /**
+     * 删除分片临时文件
+     */
+    private void deleteChunkFiles(String identifier) throws IOException {
+        String chunkFolderPath = getChunkFolderPath(identifier);
+        File chunkFolder = new File(chunkFolderPath);
+        
+        if (chunkFolder.exists() && chunkFolder.isDirectory()) {
+            FileUtil.delete(chunkFolderPath);
+            LOG.info("分片临时文件已清理: identifier={}", identifier);
+        }
     }
 }
