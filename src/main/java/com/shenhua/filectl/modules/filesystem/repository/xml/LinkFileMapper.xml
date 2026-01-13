@@ -7,10 +7,6 @@
         left join t_file tf on tf.id = tlf.file_id
         where tlf.link_id = #{linkId} and tlf.module_name = #{module} and tlf.file_id is not null and tlf.file_id != ''
     </select>
-    <select id="checkEquipmentAttachFileChangedAnotherSource" resultType="java.lang.Integer">
-        select count(*) from tr_link_file where module_name = #{module} and link_id = #{linkId}
-        and file_id like '%eflow/res/getById%' and file_id != #{nowFileId}
-    </select>
     <select id="getFileIdsByCondition" resultType="java.lang.String">
         select file_id from tr_link_file
         ${ew.customSqlSegment}

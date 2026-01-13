@@ -21,10 +21,6 @@ public interface LinkFileMapper extends BaseMapper<LinkFile> {
 
     List<FileInfo> getFileInfoByLinkId(@Param("module") String module, @Param("linkId") String linkId);
 
-    int checkEquipmentAttachFileChangedAnotherSource(@Param("module") String module,
-                                                     @Param("linkId") String linkId,
-                                                     @Param("nowFileId") String nowFileId);
-
     List<String> getFileIdsByCondition(@Param(Constants.WRAPPER) LambdaQueryWrapper<LinkFile> wr);
 
 }

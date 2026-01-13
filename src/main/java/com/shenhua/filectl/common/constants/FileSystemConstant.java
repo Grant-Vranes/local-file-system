@@ -22,6 +22,7 @@ public class FileSystemConstant {
 
     /**
      * 存放平面图文件夹 /plane_drawing_dir
+     * 实例
      */
     public static String PLANE_DRAWING_DIR;
     @Value("${file-system.plane-drawing-dir}")
